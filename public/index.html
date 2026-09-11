@@ -1,1 +1,147 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Among Us IRL</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+body{margin:0;background:#080c16;color:white;font-family:Arial;text-align:center}
+main{max-width:500px;margin:auto;padding:20px}
+.box{background:#141c2c;padding:20px;margin:15px 0;border-radius:18px}
+input,button{width:100%;padding:14px;margin:7px 0;border:0;border-radius:10px;font-size:16px}
+input{background:#263249;color:white}button{background:#e63946;color:white;font-weight:bold}
+.alt{background:#29364e}.green{background:#20966a}
+.code{font-size:40px;color:#62d9ff;font-weight:bold}
+.hidden{display:none}.role{font-size:35px;font-weight:bold;margin:25px}
+.crew{color:#62d9ff}.imp{color:#ff5361}
+.task{background:#202b40;padding:12px;margin:7px;border-radius:10px}
+</style>
+</head>
 
+<body>
+<main>
+<h1>🔴 Among Us IRL</h1>
+<p>العب مع صحابك من موبايلات مختلفة 😈</p>
+
+<div id="home" class="box">
+<input id="name" placeholder="اسمك">
+<button onclick="create()">🏠 إنشاء غرفة</button>
+<input id="code" placeholder="كود الغرفة">
+<button class="alt" onclick="join()">🚪 دخول الغرفة</button>
+</div>
+
+<div id="lobby" class="box hidden">
+<h2>الغرفة</h2>
+<div id="roomCode" class="code"></div>
+<div id="players"></div>
+<button onclick="start()">🚀 ابدأ اللعبة</button>
+</div>
+
+<div id="game" class="box hidden">
+<div id="role" class="role"></div>
+<div id="tasks"></div>
+<button class="green" onclick="meeting()">🚨 اجتماع طوارئ</button>
+</div>
+
+<div id="meet" class="box hidden">
+<h2>🚨 اجتماع</h2>
+<div id="timer">30</div>
+<p>صوّت على الشخص اللي تشك فيه:</p>
+<div id="votes"></div>
+</div>
+
+<div id="result" class="box hidden">
+<h2>🏆 النتيجة</h2>
+<div id="winner" class="role"></div>
+<button onclick="location.reload()">🔄 لعبة جديدة</button>
+</div>
+</main>
+
+<script>
+const socket=io();
+let room="";
+
+function show(id){
+["home","lobby","game","meet","result"].forEach(x=>document.getElementById(x).classList.add("hidden"));
+document.getElementById(id).classList.remove("hidden");
+}
+
+function create(){
+let name=document.getElementById("name").value.trim();
+if(!name)return alert("اكتب اسمك");
+socket.emit("create",{name},r=>{
+if(!r.ok)return alert(r.msg);
+room=r.code;
+show("lobby");
+});
+}
+
+function join(){
+let name=document.getElementById("name").value.trim();
+let code=document.getElementById("code").value.trim();
+if(!name||!code)return alert("اكتب الاسم والكود");
+socket.emit("join",{name,code},r=>{
+if(!r.ok)return alert(r.msg);
+room=r.code;
+show("lobby");
+});
+}
+
+function start(){socket.emit("start")}
+
+socket.on("room",r=>{
+document.getElementById("roomCode").textContent=r.code;
+document.getElementById("players").innerHTML=
+r.players.map(p=>`<p>👤 ${p.name}${p.alive?"":" ☠️"}</p>`).join("");
+});
+
+socket.on("started",()=>show("game"));
+
+socket.on("role",r=>{
+let role=document.getElementById("role");
+role.textContent=r.impostor?"🔪 IMPOSTOR":"🧑‍🚀 CREWMATE";
+role.className="role "+(r.impostor?"imp":"crew");
+
+document.getElementById("tasks").innerHTML=r.impostor?
+"<p>مهمتك: لا تخليهم يكتشفوك 😈</p>":
+"<h3>📋 مهامك</h3>"+r.tasks.map(t=>`<div class="task">⬜ ${t}</div>`).join("");
+});
+
+function meeting(){socket.emit("meeting")}
+
+socket.on("meeting",r=>{
+show("meet");
+let t=r.seconds;
+document.getElementById("timer").textContent=t;
+let x=setInterval(()=>{
+t--;
+document.getElementById("timer").textContent=t;
+if(t<=0)clearInterval(x);
+},1000);
+});
+
+socket.on("room",r=>{
+if(!document.getElementById("meet").classList.contains("hidden")){
+document.getElementById("votes").innerHTML=
+r.players.filter(p=>p.alive).map(p=>
+`<button class="alt" onclick="vote('${p.id}')">🗳️ ${p.name}</button>`
+).join("");
+}
+});
+
+function vote(id){
+socket.emit("vote",{target:id});
+alert("تم تسجيل تصويتك");
+}
+
+socket.on("voteDone",()=>show("game"));
+
+socket.on("result",r=>{
+show("result");
+document.getElementById("winner").textContent=
+r.winner==="crew"?"🧑‍🚀 الطاقم فاز!":"🔪 الـ Impostor فاز!";
+});
+</script>
+</body>
+  </html>
